@@ -1,19 +1,18 @@
 CREATE TABLE IF NOT EXISTS users
 (
-    id           INTEGER PRIMARY KEY,
-
+    id           SERIAL PRIMARY KEY,
     first_name   TEXT NOT NULL,
     last_name    TEXT NOT NULL,
     phone_number TEXT NOT NULL,
-
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     email        TEXT NOT NULL UNIQUE,
-    pass_hash    BLOB NOT NULL
+    pass_hash    BYTEA NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_email ON users (email);
 
 CREATE TABLE IF NOT EXISTS apps
 (
-    id     INTEGER PRIMARY KEY,
+    id     SERIAL PRIMARY KEY,
     name   TEXT NOT NULL UNIQUE,
     secret TEXT NOT NULL UNIQUE
 );

@@ -24,7 +24,7 @@ func main() {
 
 	// DONE init Application (app)
 
-	application := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+	application := app.New(log, cfg.GRPC.Port, cfg.Storage.DSN(), cfg.TokenTTL)
 
 	// DONE run gRPC-server of the app
 
@@ -40,11 +40,6 @@ func main() {
 	log.Info("stopping application", slog.String("signal", sgnl.String()))
 
 	application.GRPCSrv.Stop()
-	// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-	// TODO
-	// TODO also need to do the same shit with postgres
-	// TODO
-	// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 
 	log.Info("application stopped")
 }

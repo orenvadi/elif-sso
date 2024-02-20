@@ -13,17 +13,23 @@ import (
 type App struct {
 	log        *slog.Logger
 	gRPCServer *grpc.Server
+	db         Stoppable
 	port       int
 }
 
+type Stoppable interface {
+	Stop() error
+}
+
 // New creates new gRPCServer app.
-func New(log *slog.Logger, authService authgrpc.Auth, port int) *App {
+func New(log *slog.Logger, authService authgrpc.Auth, db Stoppable, port int) *App {
 	gRPCServer := grpc.NewServer()
 	authgrpc.Register(gRPCServer, authService)
 
 	return &App{
 		log:        log,
 		gRPCServer: gRPCServer,
+		db:         db,
 		port:       port,
 	}
 }
@@ -67,4 +73,9 @@ func (a *App) Stop() {
 	log.Info("stopping gRPC server", slog.Int("port", a.port))
 
 	a.gRPCServer.GracefulStop()
+
+	if err := a.db.Stop(); err != nil {
+		panic("could not stop postgres connection")
+	}
+	log.Info("DB connection closed")
 }

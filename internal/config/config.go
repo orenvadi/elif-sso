@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -9,10 +10,21 @@ import (
 )
 
 type Config struct {
-	Env         string        `yaml:"env" env-default:"local"` // it's better not to use in prod
-	StoragePath string        `yaml:"storage_path" env-required:"true"`
-	TokenTTL    time.Duration `yaml:"token_ttl" env-required:"true"`
-	GRPC        `yaml:"grpc"`
+	Env      string `yaml:"env" env-default:"local"` // it's better not to use in prod
+	Storage  `yaml:"storage"`
+	TokenTTL time.Duration `yaml:"token_ttl" env-required:"true"`
+	GRPC     `yaml:"grpc"`
+}
+
+type Storage struct {
+	User     string `yaml:"user" env-default:"postgres"`
+	Password string `yaml:"password" env-default:"postgres"`
+	Host     string `yaml:"host" env-default:"localhost"`
+	DbName   string `yaml:"db_name" env-required:"true"`
+}
+
+func (s Storage) DSN() string {
+	return fmt.Sprintf("%s:%s@%s/%s", s.User, s.Password, s.Host, s.DbName)
 }
 
 type GRPC struct {
