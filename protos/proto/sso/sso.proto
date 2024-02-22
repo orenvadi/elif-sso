@@ -14,6 +14,11 @@ service Auth {
   rpc Register (RegisterRequest) returns (RegisterResponse);
   // Login logs in a user and returns an auth token.
   rpc Login (LoginRequest) returns (LoginResponse);
+
+  rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
+
+  rpc ConfirmUserEmail (ConfirmUserEmailRequest) returns (ConfirmUserEmailResponse);
+
   // IsAdmin checks whether a user is an admin.
   rpc IsAdmin (IsAdminRequest) returns (IsAdminResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
@@ -57,4 +62,26 @@ message LogoutRequest {
 
 message LogoutResponse {
   bool success = 1; // Indicates whether the logout was successful.
+}
+
+message UpdateUserRequest {
+  int64 user_id = 1; // User ID of the user to update.
+  string first_name = 2; // Updated first name of the user.
+  string last_name = 3; // Updated last name of the user.
+  string phone_number = 4; // Updated phone number of the user.
+  string email = 5; // Updated email of the user.
+  // string access_token = 7
+}
+
+message UpdateUserResponse {
+  bool success = 1; // Indicates whether the update was successful.
+}
+
+
+message ConfirmUserEmailRequest{
+  string confirm_code = 1;
+}
+
+message ConfirmUserEmailRequest{
+  bool success = 1; // Indicates whether the confirm was successful.
 }

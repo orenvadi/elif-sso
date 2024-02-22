@@ -6,6 +6,7 @@ import (
 	"net"
 
 	authgrpc "github.com/orenvadi/auth-grpc/grpc/auth"
+	"github.com/orenvadi/auth-grpc/internal/storage/postgres"
 	// "github.com/orenvadi/auth-grpc/internal/services/auth"
 	"google.golang.org/grpc"
 )
@@ -13,16 +14,16 @@ import (
 type App struct {
 	log        *slog.Logger
 	gRPCServer *grpc.Server
-	db         Stoppable
+	db         *postgres.Storage
 	port       int
 }
 
-type Stoppable interface {
-	Stop() error
-}
+// type Stoppable interface {
+// 	Stop() error
+// }
 
 // New creates new gRPCServer app.
-func New(log *slog.Logger, authService authgrpc.Auth, db Stoppable, port int) *App {
+func New(log *slog.Logger, authService authgrpc.Auth, db *postgres.Storage, port int) *App {
 	gRPCServer := grpc.NewServer()
 	authgrpc.Register(gRPCServer, authService)
 

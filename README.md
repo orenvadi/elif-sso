@@ -60,3 +60,27 @@ so every time you regenerate protos
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 ```
 
+
+
+
+
+
+## TODO 
+
+-[x] Finish update of users
+
+-[] Email confirm
+-[] Reset password
+
+-[] Get user data
+-[] Refresh token
+
+
+
+
+
+
+
+
+
+

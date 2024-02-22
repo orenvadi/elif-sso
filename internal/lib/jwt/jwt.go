@@ -5,12 +5,12 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/orenvadi/auth-grpc/internal/domain/models"
+	// "github.com/dgrijalva/jwt-go"
 )
 
 // NewToken creates new JWT token for given user and app.
 func NewToken(user models.User, app models.App, duration time.Duration) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
-
 	claims := token.Claims.(jwt.MapClaims)
 	claims["uid"] = user.ID
 	claims["email"] = user.Email

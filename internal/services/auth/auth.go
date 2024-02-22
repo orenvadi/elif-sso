@@ -18,6 +18,7 @@ type Auth struct {
 	log         *slog.Logger
 	usrSaver    UserSaver
 	usrProvider UserProvider
+	usrUpdater  UserUpdater
 	appProvider AppProvider
 	tokenTTL    time.Duration
 }
@@ -26,8 +27,13 @@ type UserSaver interface {
 	SaveUser(ctx context.Context, firstName, lastName, phoneNumber, email string, passwordHash []byte) (uid int64, err error)
 }
 
+type UserUpdater interface {
+	UpdateUser(ctx context.Context, usr models.User) (err error)
+}
+
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
+	UserAllData(ctx context.Context, email string) (models.User, error)
 	IsAdmin(ctx context.Context, id int64) (bool, error)
 }
 
@@ -46,6 +52,7 @@ func New(
 	log *slog.Logger,
 	userSaver UserSaver,
 	userProvider UserProvider,
+	userUpdater UserUpdater,
 	appProvider AppProvider,
 	tokenTTL time.Duration,
 ) *Auth {
@@ -53,6 +60,7 @@ func New(
 		log:         log,
 		usrSaver:    userSaver,
 		usrProvider: userProvider,
+		usrUpdater:  userUpdater, // из-за этой херни я  потерял 3 часа
 		appProvider: appProvider,
 		tokenTTL:    tokenTTL,
 	}
@@ -156,6 +164,60 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 	log.Info("user registered")
 
 	return id, accessToken, "", nil
+}
+
+// UpdateUser updates user information.
+func (a *Auth) UpdateUser(ctx context.Context, userID int64, firstName, lastName, phoneNumber, email string) error {
+	const op = "auth.UpdateUser"
+
+	log := a.log.With(
+		slog.String("op: ", op),
+		slog.Int64("user_id", userID),
+	)
+
+	log.Info("updating user")
+
+	// Retrieve the user from the storage
+	user, err := a.usrProvider.UserAllData(ctx, email)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			a.log.Warn("user not found", sl.Err(err))
+			return ErrInvalidCredentials // or ErrUserNotFound
+		}
+
+		log.Warn("user not found", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Update user information
+	user.FirstName = firstName
+	user.LastName = lastName
+	user.PhoneNumber = phoneNumber
+	user.Email = email
+
+	// Hash and update password if provided
+	// if password != "" {
+	// 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	// 	if err != nil {
+	// 		log.Error("failed to generate password hash", sl.Err(err))
+	// 		return fmt.Errorf("%s: %w", op, err)
+	// 	}
+	// 	user.PasswordHash = passwordHash
+	// }
+
+	// log.Info("upd: ", sl.Err(fmt.Errorf(fmt.Sprintf("%v", user))))
+
+	// Save updated user information to the storage
+
+	err = a.usrUpdater.UpdateUser(ctx, user)
+	if err != nil {
+		log.Error("failed to update user", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Info("user updated successfully")
+
+	return nil
 }
 
 func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {

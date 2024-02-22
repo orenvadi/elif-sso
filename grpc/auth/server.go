@@ -3,20 +3,25 @@ package grpcauth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/bufbuild/protovalidate-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/orenvadi/auth-grpc/internal/services/auth"
 	"github.com/orenvadi/auth-grpc/internal/storage"
 	ssov1 "github.com/orenvadi/auth-grpc/protos/gen/go/proto/sso"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 type Auth interface {
 	Login(ctx context.Context, email, password string, appID int) (accessToken string, err error)
 	RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string) (userID int64, accessToken, refreshToken string, err error)
+	UpdateUser(ctx context.Context, userID int64, firstName, lastName, phoneNumber, email string) error
 	IsAdmin(ctx context.Context, userID int64) (bool, error)
 }
 
@@ -92,7 +97,7 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		if errors.Is(err, storage.ErrUserExists) {
 			return nil, status.Error(codes.AlreadyExists, "user already exists")
 		}
-		// cause it is internal service, and users have no access to us
+		// because it is internal service, and users have no access to us
 		// we can return internal errors to the client services
 
 		return nil, status.Error(codes.Internal, err.Error())
@@ -102,6 +107,50 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		UserId:       userID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+	}, nil
+}
+
+// this took me 8 hours to debug
+func (s *serverAPI) UpdateUser(ctx context.Context, req *ssov1.UpdateUserRequest) (*ssov1.UpdateUserResponse, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("missing context metadata")
+	}
+
+	authHeaders := md.Get("authorization")
+	if len(authHeaders) == 0 {
+		return nil, fmt.Errorf("missing authorization header")
+	}
+
+	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeaders[0], "Bearer "))
+
+	// Parse and validate JWT token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte("test-secret"), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("invalid token: %v", err)
+	}
+
+	// Check if the token is valid
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	// Extract username from token
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+	userID := claims["uid"].(float64)
+	uid := int64(userID)
+
+	if err = s.auth.UpdateUser(ctx, uid, req.GetFirstName(), req.GetLastName(), req.GetPhoneNumber(), req.GetEmail()); err != nil {
+		return nil, err
+	}
+
+	return &ssov1.UpdateUserResponse{
+		Success: true,
 	}, nil
 }
 
