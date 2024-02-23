@@ -3,25 +3,21 @@ package grpcauth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
-	"strings"
 
 	"github.com/bufbuild/protovalidate-go"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/orenvadi/auth-grpc/internal/services/auth"
 	"github.com/orenvadi/auth-grpc/internal/storage"
 	ssov1 "github.com/orenvadi/auth-grpc/protos/gen/go/proto/sso"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 type Auth interface {
-	Login(ctx context.Context, email, password string, appID int) (accessToken string, err error)
+	Login(ctx context.Context, email, password string, appID int64) (accessToken string, err error)
 	RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string) (userID int64, accessToken, refreshToken string, err error)
-	UpdateUser(ctx context.Context, userID int64, firstName, lastName, phoneNumber, email string) error
+	UpdateUser(ctx context.Context, firstName, lastName, phoneNumber, email string, appID int64) error
 	IsAdmin(ctx context.Context, userID int64) (bool, error)
 }
 
@@ -60,7 +56,7 @@ func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 
 	// DONE: implement login via auth service
 
-	accessToken, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), int(req.GetAppId()))
+	accessToken, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), req.GetAppId())
 	if err != nil {
 		// DONE handle various error types
 
@@ -111,41 +107,18 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 }
 
 // this took me 8 hours to debug
-func (s *serverAPI) UpdateUser(ctx context.Context, req *ssov1.UpdateUserRequest) (*ssov1.UpdateUserResponse, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, fmt.Errorf("missing context metadata")
-	}
-
-	authHeaders := md.Get("authorization")
-	if len(authHeaders) == 0 {
-		return nil, fmt.Errorf("missing authorization header")
-	}
-
-	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeaders[0], "Bearer "))
-
-	// Parse and validate JWT token
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte("test-secret"), nil
-	})
+func (s *serverAPI) UpdateUser(ctx context.Context, req *ssov1.UpdateUserRequest) (updateUserResponse *ssov1.UpdateUserResponse, err error) {
+	v, err := protovalidate.New()
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %v", err)
+		log.Fatalln("error protovalidate", err)
 	}
 
-	// Check if the token is valid
-	if !token.Valid {
-		return nil, fmt.Errorf("invalid token")
+	// validating
+	if err := v.Validate(req); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	// Extract username from token
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
-	}
-	userID := claims["uid"].(float64)
-	uid := int64(userID)
-
-	if err = s.auth.UpdateUser(ctx, uid, req.GetFirstName(), req.GetLastName(), req.GetPhoneNumber(), req.GetEmail()); err != nil {
+	if err = s.auth.UpdateUser(ctx, req.GetFirstName(), req.GetLastName(), req.GetPhoneNumber(), req.GetEmail(), req.GetAppId()); err != nil {
 		return nil, err
 	}
 

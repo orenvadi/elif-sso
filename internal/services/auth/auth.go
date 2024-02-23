@@ -33,12 +33,12 @@ type UserUpdater interface {
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
-	UserAllData(ctx context.Context, email string) (models.User, error)
+	UserAllData(ctx context.Context, id int64) (models.User, error)
 	IsAdmin(ctx context.Context, id int64) (bool, error)
 }
 
 type AppProvider interface {
-	App(ctx context.Context, appID int) (models.App, error)
+	App(ctx context.Context, appID int64) (models.App, error)
 }
 
 var (
@@ -70,7 +70,7 @@ func New(
 //
 // If user exists, but password is incorrect, returns error.
 // If user doesn't exist, returns error.
-func (a *Auth) Login(ctx context.Context, email, password string, appID int) (accessToken string, err error) {
+func (a *Auth) Login(ctx context.Context, email, password string, appID int64) (accessToken string, err error) {
 	const op = "auth.Login"
 
 	log := a.log.With(
@@ -104,7 +104,7 @@ func (a *Auth) Login(ctx context.Context, email, password string, appID int) (ac
 	}
 	log.Info("user logged in successfully")
 
-	accessToken, err = jwt.NewToken(user, app, a.tokenTTL)
+	accessToken, err = jwtn.NewToken(user, app, a.tokenTTL)
 	if err != nil {
 		log.Error("failed to generate token", sl.Err(err))
 
@@ -154,7 +154,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 
 	app := models.App{}
 
-	accessToken, err = jwt.NewToken(user, app, a.tokenTTL)
+	accessToken, err = jwtn.NewToken(user, app, a.tokenTTL)
 	if err != nil {
 		log.Error("failed to generate token", sl.Err(err))
 
@@ -167,18 +167,39 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 }
 
 // UpdateUser updates user information.
-func (a *Auth) UpdateUser(ctx context.Context, userID int64, firstName, lastName, phoneNumber, email string) error {
+func (a *Auth) UpdateUser(ctx context.Context, firstName, lastName, phoneNumber, email string, appID int64) error {
 	const op = "auth.UpdateUser"
 
 	log := a.log.With(
 		slog.String("op: ", op),
-		slog.Int64("user_id", userID),
+		// slog.String("user_email", email),
 	)
+
+	// Extract username from token
+
+	app, err := a.appProvider.App(ctx, appID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			a.log.Warn("user not found", sl.Err(err))
+
+			return fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+
+		log.Warn("user not found", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	claims, err := jwtn.ValidateToken(ctx, app)
+	if err != nil {
+		return fmt.Errorf("invalid token claims")
+	}
+	userID := claims["uid"].(float64)
+	uid := int64(userID)
 
 	log.Info("updating user")
 
 	// Retrieve the user from the storage
-	user, err := a.usrProvider.UserAllData(ctx, email)
+	user, err := a.usrProvider.UserAllData(ctx, uid)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			a.log.Warn("user not found", sl.Err(err))

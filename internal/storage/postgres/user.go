@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/orenvadi/auth-grpc/internal/domain/models"
@@ -42,11 +41,11 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 	return user, nil
 }
 
-func (s *Storage) UserAllData(ctx context.Context, email string) (models.User, error) {
+func (s *Storage) UserAllData(ctx context.Context, uid int64) (models.User, error) {
 	const op = "storage.postgres.User"
 
 	var user models.User
-	err := s.db.GetContext(ctx, &user, "SELECT id, first_name, last_name, phone_number, created_at, updated_at, email, pass_hash, is_admin FROM users WHERE email = $1", email)
+	err := s.db.GetContext(ctx, &user, "SELECT id, first_name, last_name, phone_number, created_at, updated_at, email, pass_hash, is_admin FROM users WHERE id = $1", uid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.User{}, fmt.Errorf("%s: %w, user = %v", op, storage.ErrUserNotFound, user)
@@ -57,25 +56,9 @@ func (s *Storage) UserAllData(ctx context.Context, email string) (models.User, e
 	return user, nil
 }
 
-func (s *Storage) App(ctx context.Context, id int) (models.App, error) {
-	const op = "storage.postgres.App"
-
-	var app models.App
-	err := s.db.GetContext(ctx, &app, "SELECT id, name, secret FROM apps WHERE id = $1", id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
-		}
-		return models.App{}, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return app, nil
-}
-
 func (s *Storage) UpdateUser(ctx context.Context, user models.User) error {
 	const op = "storage.postgres.UpdateUser"
 
-	log.Println(user)
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE users
 		SET first_name = $1, last_name = $2, phone_number = $3, email = $4 

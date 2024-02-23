@@ -8,7 +8,6 @@ package sso
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -28,6 +27,7 @@ type AuthClient interface {
 	// Login logs in a user and returns an auth token.
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UpdateUserResponse, error)
+	ConfirmUserEmail(ctx context.Context, in *ConfirmUserEmailRequest, opts ...grpc.CallOption) (*ConfirmUserEmailResponse, error)
 	// IsAdmin checks whether a user is an admin.
 	IsAdmin(ctx context.Context, in *IsAdminRequest, opts ...grpc.CallOption) (*IsAdminResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
@@ -68,6 +68,15 @@ func (c *authClient) UpdateUser(ctx context.Context, in *UpdateUserRequest, opts
 	return out, nil
 }
 
+func (c *authClient) ConfirmUserEmail(ctx context.Context, in *ConfirmUserEmailRequest, opts ...grpc.CallOption) (*ConfirmUserEmailResponse, error) {
+	out := new(ConfirmUserEmailResponse)
+	err := c.cc.Invoke(ctx, "/auth.Auth/ConfirmUserEmail", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authClient) IsAdmin(ctx context.Context, in *IsAdminRequest, opts ...grpc.CallOption) (*IsAdminResponse, error) {
 	out := new(IsAdminResponse)
 	err := c.cc.Invoke(ctx, "/auth.Auth/IsAdmin", in, out, opts...)
@@ -95,6 +104,7 @@ type AuthServer interface {
 	// Login logs in a user and returns an auth token.
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	UpdateUser(context.Context, *UpdateUserRequest) (*UpdateUserResponse, error)
+	ConfirmUserEmail(context.Context, *ConfirmUserEmailRequest) (*ConfirmUserEmailResponse, error)
 	// IsAdmin checks whether a user is an admin.
 	IsAdmin(context.Context, *IsAdminRequest) (*IsAdminResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
@@ -102,24 +112,24 @@ type AuthServer interface {
 }
 
 // UnimplementedAuthServer must be embedded to have forward compatible implementations.
-type UnimplementedAuthServer struct{}
+type UnimplementedAuthServer struct {
+}
 
 func (UnimplementedAuthServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
 }
-
 func (UnimplementedAuthServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
-
 func (UnimplementedAuthServer) UpdateUser(context.Context, *UpdateUserRequest) (*UpdateUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateUser not implemented")
 }
-
+func (UnimplementedAuthServer) ConfirmUserEmail(context.Context, *ConfirmUserEmailRequest) (*ConfirmUserEmailResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmUserEmail not implemented")
+}
 func (UnimplementedAuthServer) IsAdmin(context.Context, *IsAdminRequest) (*IsAdminResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IsAdmin not implemented")
 }
-
 func (UnimplementedAuthServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
 }
@@ -190,6 +200,24 @@ func _Auth_UpdateUser_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Auth_ConfirmUserEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmUserEmailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServer).ConfirmUserEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/auth.Auth/ConfirmUserEmail",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServer).ConfirmUserEmail(ctx, req.(*ConfirmUserEmailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Auth_IsAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IsAdminRequest)
 	if err := dec(in); err != nil {
@@ -244,6 +272,10 @@ var Auth_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateUser",
 			Handler:    _Auth_UpdateUser_Handler,
+		},
+		{
+			MethodName: "ConfirmUserEmail",
+			Handler:    _Auth_ConfirmUserEmail_Handler,
 		},
 		{
 			MethodName: "IsAdmin",
