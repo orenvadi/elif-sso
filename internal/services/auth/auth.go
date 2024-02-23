@@ -208,9 +208,7 @@ func sendVerificationEmail(email, code string) error {
     <body>
         <h1 style="text-align: center;">Email Verification Code</h1>
         <p style="text-align: center; font-size: 20px;">Your verification code is:</p>
-        <div style="text-align: center; font-size: 30px; border: 2px solid #000; padding: 10px; margin: 20px;">
-            <a href="http://localhost:8000/api/auth-controllers/verify-email?link=` + code + `">кодддд<a/>
-        </div>
+        <div style="text-align: center; font-size: 30px; border: 2px solid #000; padding: 10px; margin: 20px;">` + code + `</div>
     </body>
     </html>
     `
@@ -394,4 +392,41 @@ func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	log.Info("checked if user is admin", slog.Bool("is_admin", isAdmin))
 
 	return isAdmin, nil
+}
+
+func (a *Auth) GetUserData(ctx context.Context, appID int64) (models.User, error) {
+	const op = "auth.GetUserData"
+
+	log := a.log.With(
+		slog.String("op: ", op),
+		// slog.String("user_email", email),
+	)
+
+	// Extract username from token
+
+	app, err := a.appProvider.App(ctx, appID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			a.log.Warn("user not found", sl.Err(err))
+
+			return models.User{}, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+
+		log.Warn("user not found", sl.Err(err))
+		return models.User{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	claims, err := jwtn.ValidateToken(ctx, app)
+	if err != nil {
+		return models.User{}, fmt.Errorf("invalid token claims")
+	}
+	userID := claims["uid"].(float64)
+	uid := int64(userID)
+
+	user, err := a.usrProvider.UserAllData(ctx, uid)
+	if err != nil {
+		return models.User{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return user, nil
 }

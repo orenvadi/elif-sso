@@ -6,12 +6,14 @@ import (
 	"log"
 
 	"github.com/bufbuild/protovalidate-go"
+	"github.com/orenvadi/auth-grpc/internal/domain/models"
 	"github.com/orenvadi/auth-grpc/internal/services/auth"
 	"github.com/orenvadi/auth-grpc/internal/storage"
 	ssov1 "github.com/orenvadi/auth-grpc/protos/gen/go/proto/sso"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Auth interface {
@@ -20,6 +22,7 @@ type Auth interface {
 	UpdateUser(ctx context.Context, firstName, lastName, phoneNumber, email string, appID int64) error
 	IsAdmin(ctx context.Context, userID int64) (bool, error)
 	ConfirmUserEmail(ctx context.Context, code string, appID int64) (success bool, err error)
+	GetUserData(ctx context.Context, appID int64) (models.User, error)
 }
 
 type serverAPI struct {
@@ -184,5 +187,22 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ss
 
 	return &ssov1.IsAdminResponse{
 		IsAdmin: isAdmin,
+	}, nil
+}
+
+func (s *serverAPI) GetUserData(ctx context.Context, req *ssov1.GetUserDataRequest) (*ssov1.GetUserDataResponse, error) {
+	user, err := s.auth.GetUserData(ctx, req.AppId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ssov1.GetUserDataResponse{
+		Id:          user.ID,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+		PhoneNumber: user.PhoneNumber,
+		CreatedAt:   timestamppb.New(user.CreatedAt),
+		UpdatedAt:   timestamppb.New(user.UpdatedAt),
+		Email:       user.Email,
 	}, nil
 }

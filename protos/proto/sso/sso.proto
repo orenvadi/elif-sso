@@ -6,7 +6,8 @@ package auth;
 // option go_package = "tuzov.sso.v1;ssov1";
 
 import "buf/validate/validate.proto";
-
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 // Auth is service for managing permissions and roles.
 service Auth {
@@ -22,6 +23,8 @@ service Auth {
   // IsAdmin checks whether a user is an admin.
   rpc IsAdmin (IsAdminRequest) returns (IsAdminResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
+
+  rpc GetUserData (GetUserDataRequest) returns (GetUserDataResponse);
 }
 
 message IsAdminRequest {
@@ -86,4 +89,19 @@ message ConfirmUserEmailRequest{
 
 message ConfirmUserEmailResponse{
   bool success = 1; // Indicates whether the confirm was successful.
+}
+
+
+message GetUserDataRequest{
+  int64 app_id = 1;
+}
+
+message GetUserDataResponse{
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string phone_number = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  string email = 7;
 }
