@@ -71,6 +71,21 @@ func (s *Storage) UpdateUser(ctx context.Context, user models.User) error {
 	return nil
 }
 
+func (s *Storage) UserEmailConfirm(ctx context.Context, userID int64) error {
+	const op = "storage.postgres.UpdateUser"
+
+	_, err := s.db.ExecContext(ctx, `
+        UPDATE users
+        SET is_email_confirmed = TRUE
+        WHERE id = $1;
+	`, userID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
 func (s *Storage) DeleteUser(ctx context.Context, userID int64) error {
 	const op = "storage.postgres.DeleteUser"
 

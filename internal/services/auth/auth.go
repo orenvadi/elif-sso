@@ -5,22 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/smtp"
 	"time"
 
 	"github.com/orenvadi/auth-grpc/internal/domain/models"
 	"github.com/orenvadi/auth-grpc/internal/lib/jwt"
 	"github.com/orenvadi/auth-grpc/internal/lib/jwt/logger/sl"
+	"github.com/orenvadi/auth-grpc/internal/lib/rnd"
 	"github.com/orenvadi/auth-grpc/internal/storage"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Auth struct {
-	log         *slog.Logger
-	usrSaver    UserSaver
-	usrProvider UserProvider
-	usrUpdater  UserUpdater
-	appProvider AppProvider
-	tokenTTL    time.Duration
+	log                  *slog.Logger
+	usrSaver             UserSaver
+	usrProvider          UserProvider
+	usrUpdater           UserUpdater
+	appProvider          AppProvider
+	emailConfirmProvider EmailConfirmProvider
+	tokenTTL             time.Duration
 }
 
 type UserSaver interface {
@@ -35,10 +38,17 @@ type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
 	UserAllData(ctx context.Context, id int64) (models.User, error)
 	IsAdmin(ctx context.Context, id int64) (bool, error)
+	UserEmailConfirm(ctx context.Context, userID int64) error
 }
 
 type AppProvider interface {
 	App(ctx context.Context, appID int64) (models.App, error)
+}
+
+type EmailConfirmProvider interface {
+	SaveConfirmationCode(ctx context.Context, userID int64, code string) error
+	ConfirmationCode(ctx context.Context, userID int64) (confirmCodeID int64, confirmCode, email string, createdAt time.Time, err error)
+	DeleteConfirmationCode(ctx context.Context, user_id int64) error
 }
 
 var (
@@ -54,15 +64,17 @@ func New(
 	userProvider UserProvider,
 	userUpdater UserUpdater,
 	appProvider AppProvider,
+	emailConfirmProvider EmailConfirmProvider,
 	tokenTTL time.Duration,
 ) *Auth {
 	return &Auth{
-		log:         log,
-		usrSaver:    userSaver,
-		usrProvider: userProvider,
-		usrUpdater:  userUpdater, // из-за этой херни я  потерял 3 часа
-		appProvider: appProvider,
-		tokenTTL:    tokenTTL,
+		log:                  log,
+		usrSaver:             userSaver,
+		usrProvider:          userProvider,
+		usrUpdater:           userUpdater, // из-за этой херни я  потерял 3 часа
+		appProvider:          appProvider,
+		emailConfirmProvider: emailConfirmProvider,
+		tokenTTL:             tokenTTL,
 	}
 }
 
@@ -114,7 +126,7 @@ func (a *Auth) Login(ctx context.Context, email, password string, appID int64) (
 	return accessToken, nil
 }
 
-func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string) (userID int64, accessToken, refreshToken string, err error) {
+func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string, appID int64) (userID int64, accessToken, refreshToken string, err error) {
 	const op = "auth.RegisterNewUser"
 
 	log := a.log.With(
@@ -130,7 +142,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 		return 0, "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	id, err := a.usrSaver.SaveUser(ctx, firstName, lastName, phoneNumber, email, passwordHash)
+	userID, err = a.usrSaver.SaveUser(ctx, firstName, lastName, phoneNumber, email, passwordHash)
 	if err != nil {
 
 		if errors.Is(err, storage.ErrUserExists) {
@@ -144,7 +156,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 	}
 
 	user := models.User{
-		ID:           id,
+		ID:           userID,
 		FirstName:    firstName,
 		LastName:     lastName,
 		PhoneNumber:  phoneNumber,
@@ -152,7 +164,17 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 		PasswordHash: passwordHash,
 	}
 
-	app := models.App{}
+	app, err := a.appProvider.App(ctx, appID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			a.log.Warn("user not found", sl.Err(err))
+
+			return -1, "", "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+
+		log.Warn("user not found", sl.Err(err))
+		return -1, "", "", fmt.Errorf("%s: %w", op, err)
+	}
 
 	accessToken, err = jwtn.NewToken(user, app, a.tokenTTL)
 	if err != nil {
@@ -163,7 +185,113 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 
 	log.Info("user registered")
 
-	return id, accessToken, "", nil
+	// Sending confirmation code
+	rndCode := rnd.GenerateRandomNumber()
+
+	if err = sendVerificationEmail(user.Email, rndCode); err != nil {
+		return 0, "", "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err = a.emailConfirmProvider.SaveConfirmationCode(ctx, user.ID, rndCode); err != nil {
+		return 0, "", "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	return userID, accessToken, "", nil
+}
+
+func sendVerificationEmail(email, code string) error {
+	auth := smtp.PlainAuth("", "eligdigital@gmail.com", "dqwqqgtxbbuwobgt", "smtp.gmail.com")
+	to := []string{email}
+
+	htmlMsg := `
+    <html>
+    <body>
+        <h1 style="text-align: center;">Email Verification Code</h1>
+        <p style="text-align: center; font-size: 20px;">Your verification code is:</p>
+        <div style="text-align: center; font-size: 30px; border: 2px solid #000; padding: 10px; margin: 20px;">
+            <a href="http://localhost:8000/api/auth-controllers/verify-email?link=` + code + `">кодддд<a/>
+        </div>
+    </body>
+    </html>
+    `
+
+	err := smtp.SendMail("smtp.gmail.com:587", auth, "eligdigital@gmail.com", to, []byte(
+		"From: eligdigital@gmail.com\r\n"+
+			"To: "+email+"\r\n"+
+			"Subject: Email Verification Code\r\n"+
+			"MIME-Version: 1.0\r\n"+
+			"Content-Type: text/html; charset=utf-8\r\n"+
+			"\r\n"+
+			htmlMsg,
+	))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *Auth) ConfirmUserEmail(ctx context.Context, confirmCode string, appID int64) (success bool, err error) {
+	const op = "auth.ConfirmUserEmail"
+
+	log := a.log.With(
+		slog.String("op: ", op),
+		// slog.String("user_email", email),
+	)
+
+	// Extract username from token
+
+	app, err := a.appProvider.App(ctx, appID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			a.log.Warn("user not found", sl.Err(err))
+
+			return false, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+
+		log.Warn("user not found", sl.Err(err))
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	claims, err := jwtn.ValidateToken(ctx, app)
+	if err != nil {
+		return false, fmt.Errorf("invalid token claims")
+	}
+	userID := claims["uid"].(float64)
+	uid := int64(userID)
+
+	// logicccc
+
+	log.Info("confirming user")
+
+	confirmCodeID, confirmCodeFromDB, email, createdAt, err := a.emailConfirmProvider.ConfirmationCode(ctx, uid)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	_ = email
+
+	now := time.Now()
+
+	if confirmCode != confirmCodeFromDB {
+		return false, fmt.Errorf("%s: invalid confirm code", op)
+	}
+
+	if now.Sub(createdAt) > (50 * time.Minute) {
+		return false, fmt.Errorf("%s: confirm code is expired", op)
+	}
+
+	if err = a.usrProvider.UserEmailConfirm(ctx, uid); err != nil {
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err = a.emailConfirmProvider.DeleteConfirmationCode(ctx, confirmCodeID); err != nil {
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	// logicccc end
+
+	log.Info("user confirmed")
+	return true, nil
 }
 
 // UpdateUser updates user information.

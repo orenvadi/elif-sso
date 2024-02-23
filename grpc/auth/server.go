@@ -16,9 +16,10 @@ import (
 
 type Auth interface {
 	Login(ctx context.Context, email, password string, appID int64) (accessToken string, err error)
-	RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string) (userID int64, accessToken, refreshToken string, err error)
+	RegisterNewUser(ctx context.Context, firstName, lastName, phoneNumber, email, password string, appID int64) (userID int64, accessToken, refreshToken string, err error)
 	UpdateUser(ctx context.Context, firstName, lastName, phoneNumber, email string, appID int64) error
 	IsAdmin(ctx context.Context, userID int64) (bool, error)
+	ConfirmUserEmail(ctx context.Context, code string, appID int64) (success bool, err error)
 }
 
 type serverAPI struct {
@@ -86,7 +87,7 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	userID, accessToken, refreshToken, err := s.auth.RegisterNewUser(ctx, req.GetFirstName(), req.GetLastName(), req.GetPhoneNumber(), req.GetEmail(), req.GetPassword())
+	userID, accessToken, refreshToken, err := s.auth.RegisterNewUser(ctx, req.GetFirstName(), req.GetLastName(), req.GetPhoneNumber(), req.GetEmail(), req.GetPassword(), req.GetAppId())
 	if err != nil {
 		// DONE handle various error types
 
@@ -103,6 +104,27 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		UserId:       userID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *serverAPI) ConfirmUserEmail(ctx context.Context, req *ssov1.ConfirmUserEmailRequest) (confirmUserEmailResponse *ssov1.ConfirmUserEmailResponse, err error) {
+	v, err := protovalidate.New()
+	if err != nil {
+		log.Fatalln("error protovalidate", err)
+	}
+
+	// validating
+	if err := v.Validate(req); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	confirmSuccess, err := s.auth.ConfirmUserEmail(ctx, req.GetConfirmCode(), req.GetAppId())
+	if err != nil {
+		return nil, err
+	}
+
+	return &ssov1.ConfirmUserEmailResponse{
+		Success: confirmSuccess,
 	}, nil
 }
 

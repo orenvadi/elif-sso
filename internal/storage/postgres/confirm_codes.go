@@ -24,23 +24,23 @@ func (s *Storage) SaveConfirmationCode(ctx context.Context, userID int64, code s
 	return nil
 }
 
-func (s *Storage) ConfirmationCode(ctx context.Context, userID int64) (confirmCode string, email string, err error) {
+func (s *Storage) ConfirmationCode(ctx context.Context, userID int64) (confirmCodeID int64, confirmCode string, email string, createdAt time.Time, err error) {
 	const op = "storage.postgres.GetConfirmationCodeByEmail"
 
 	err = s.db.QueryRowContext(ctx, `
-		SELECT code, email
+		SELECT ec.id, code, email, u.created_at
 		FROM email_confirmation ec
 		INNER JOIN users u ON ec.user_id = u.id
 		WHERE ec.user_id = $1
-	`, userID).Scan(&confirmCode, &email)
+	`, userID).Scan(&confirmCodeID, &confirmCode, &email, &createdAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", "", fmt.Errorf("%s: %w", op, storage.ErrConfirmCodeNotFound)
+			return 0, "", "", time.Time{}, fmt.Errorf("%s: %w", op, storage.ErrConfirmCodeNotFound)
 		}
-		return "", "", fmt.Errorf("%s: %w", op, err)
+		return 0, "", "", time.Time{}, fmt.Errorf("%s: %w", op, storage.ErrConfirmCodeNotFound)
 	}
 
-	return confirmCode, email, nil
+	return confirmCodeID, confirmCode, email, createdAt, nil
 }
 
 func (s *Storage) DeleteConfirmationCode(ctx context.Context, user_id int64) error {

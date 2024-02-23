@@ -81,6 +81,7 @@ message UpdateUserResponse {
 
 message ConfirmUserEmailRequest{
   string confirm_code = 1;
+  int64 app_id = 2;
 }
 
 message ConfirmUserEmailResponse{
