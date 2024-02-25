@@ -22,8 +22,5 @@ COPY migrations /migrations
 # Run migrator
 RUN ./migrator
 
-# Expose any ports the app is expecting in the environment
-EXPOSE 8888
-
 # Command to run the application
 CMD ./$APP_NAME
