@@ -27,6 +27,7 @@ WORKDIR /app
 COPY --from=builder /app/sso /app/migrator ./
 
 # Set environment variables for database connection
+ENV STORAGE_DSN="fl0user:UznBh5YJ4jTr@ep-floral-lab-a2kt6p4c.eu-central-1.aws.neon.fl0.io:5432/elifgrpc"
 
 # Expose any necessary ports
 # EXPOSE <port_number>
