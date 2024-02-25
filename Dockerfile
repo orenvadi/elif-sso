@@ -1,10 +1,10 @@
-ARG APP_NAME=app
+ARG APP_NAME=myapp
 
 # Build stage
 FROM golang:1.22 as build
 ARG APP_NAME
 ENV APP_NAME=$APP_NAME
-WORKDIR /app
+WORKDIR /myapp
 COPY . .
 RUN go mod download
 RUN go build -o /app/$APP_NAME  
@@ -14,7 +14,7 @@ FROM alpine:latest as production
 ARG APP_NAME
 ENV APP_NAME=$APP_NAME
 WORKDIR /root/
-COPY --from=build /app/$APP_NAME ./  
+COPY --from=build /myapp/$APP_NAME ./  
 
 # Copy migration files
 COPY migrations /migrations
