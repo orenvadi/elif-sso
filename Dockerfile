@@ -1,5 +1,5 @@
 # Use a Golang base image
-FROM golang:1.22 AS builder
+FROM golang:1.17 AS builder
 
 # Set the current working directory inside the container
 WORKDIR /app
@@ -26,14 +26,14 @@ WORKDIR /app
 # Copy the binary files from the builder stage
 COPY --from=builder /app/sso /app/migrator ./
 
+# Copy migrations files
+COPY migrations ./migrations
+
 # Set environment variables for database connection
 ENV STORAGE_DSN="fl0user:UznBh5YJ4jTr@ep-floral-lab-a2kt6p4c.eu-central-1.aws.neon.fl0.io:5432/elifgrpc"
 
-# Expose any necessary ports
-# EXPOSE <port_number>
-
 # Run the migrator before starting the application
-RUN ./migrator --storage-dsn="fl0user:UznBh5YJ4jTr@ep-floral-lab-a2kt6p4c.eu-central-1.aws.neon.fl0.io:5432/elifgrpc" --migrations-path=./migrations/postgres
+RUN ./migrator --storage-dsn="$STORAGE_DSN" --migrations-path=./migrations/postgres
 
 # Command to run the application
 CMD ["./sso"]
