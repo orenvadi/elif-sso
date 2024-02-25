@@ -2,15 +2,14 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Env      string // No need for env-default tag, we'll set defaults directly in the code
+	Env      string
 	Storage  Storage
 	TokenTTL time.Duration
 	GRPC     GRPC
@@ -33,38 +32,38 @@ type GRPC struct {
 }
 
 func MustLoad() *Config {
-	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		panic(fmt.Sprintf("Error loading .env file: %v", err))
+	viper.SetConfigFile(".env")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		panic(fmt.Errorf("error reading config file: %s", err))
 	}
 
 	var cfg Config
 
-	// Retrieve environment variables and set defaults
-	cfg.Env = os.Getenv("ENV")
+	cfg.Env = viper.GetString("ENV")
 	if cfg.Env == "" {
-		cfg.Env = "local" // Default value if ENV is not set
+		cfg.Env = "local"
 	}
 
-	cfg.Storage.User = os.Getenv("STORAGE_USER")
+	cfg.Storage.User = viper.GetString("STORAGE_USER")
 	if cfg.Storage.User == "" {
-		cfg.Storage.User = "postgres" // Default value if STORAGE_USER is not set
+		cfg.Storage.User = "postgres"
 	}
-	cfg.Storage.Password = os.Getenv("STORAGE_PASSWORD")
+	cfg.Storage.Password = viper.GetString("STORAGE_PASSWORD")
 	if cfg.Storage.Password == "" {
-		cfg.Storage.Password = "postgres" // Default value if STORAGE_PASSWORD is not set
+		cfg.Storage.Password = "postgres"
 	}
-	cfg.Storage.Host = os.Getenv("STORAGE_HOST")
+	cfg.Storage.Host = viper.GetString("STORAGE_HOST")
 	if cfg.Storage.Host == "" {
-		cfg.Storage.Host = "localhost" // Default value if STORAGE_HOST is not set
+		cfg.Storage.Host = "localhost"
 	}
-	cfg.Storage.DbName = os.Getenv("STORAGE_DB_NAME")
+	cfg.Storage.DbName = viper.GetString("STORAGE_DB_NAME")
 	if cfg.Storage.DbName == "" {
 		panic("STORAGE_DB_NAME environment variable is required")
 	}
 
-	tokenTTLStr := os.Getenv("TOKEN_TTL")
+	tokenTTLStr := viper.GetString("TOKEN_TTL")
 	if tokenTTLStr == "" {
 		panic("TOKEN_TTL environment variable is required")
 	}
@@ -74,7 +73,7 @@ func MustLoad() *Config {
 	}
 	cfg.TokenTTL = tokenTTL
 
-	grpcPortStr := os.Getenv("GRPC_PORT")
+	grpcPortStr := viper.GetString("GRPC_PORT")
 	if grpcPortStr == "" {
 		panic("GRPC_PORT environment variable is required")
 	}
@@ -84,7 +83,7 @@ func MustLoad() *Config {
 	}
 	cfg.GRPC.Port = grpcPort
 
-	grpcTimeoutStr := os.Getenv("GRPC_TIMEOUT")
+	grpcTimeoutStr := viper.GetString("GRPC_TIMEOUT")
 	if grpcTimeoutStr == "" {
 		panic("GRPC_TIMEOUT environment variable is required")
 	}
