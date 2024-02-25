@@ -22,6 +22,7 @@ type Auth struct {
 	usrProvider          UserProvider
 	usrUpdater           UserUpdater
 	appProvider          AppProvider
+	passwordResetter     PasswordResetter
 	emailConfirmProvider EmailConfirmProvider
 	tokenTTL             time.Duration
 }
@@ -47,8 +48,13 @@ type AppProvider interface {
 
 type EmailConfirmProvider interface {
 	SaveConfirmationCode(ctx context.Context, userID int64, code string) error
-	ConfirmationCode(ctx context.Context, userID int64) (confirmCodeID int64, confirmCode, email string, createdAt time.Time, err error)
+	ConfirmationCode(ctx context.Context, userID int64) (confCode models.ConfirmCode, err error)
 	DeleteConfirmationCode(ctx context.Context, user_id int64) error
+}
+
+type PasswordResetter interface {
+	IsEmailConfirmed(ctx context.Context, email string) (bool, error)
+	ChangePassword(ctx context.Context, email string, newPasswordHash []byte) error
 }
 
 var (
@@ -65,6 +71,7 @@ func New(
 	userUpdater UserUpdater,
 	appProvider AppProvider,
 	emailConfirmProvider EmailConfirmProvider,
+	passwordResetter PasswordResetter,
 	tokenTTL time.Duration,
 ) *Auth {
 	return &Auth{
@@ -74,6 +81,7 @@ func New(
 		usrUpdater:           userUpdater, // из-за этой херни я  потерял 3 часа
 		appProvider:          appProvider,
 		emailConfirmProvider: emailConfirmProvider,
+		passwordResetter:     passwordResetter,
 		tokenTTL:             tokenTTL,
 	}
 }
@@ -188,11 +196,11 @@ func (a *Auth) RegisterNewUser(ctx context.Context, firstName, lastName, phoneNu
 	// Sending confirmation code
 	rndCode := rnd.GenerateRandomNumber()
 
-	if err = sendVerificationEmail(user.Email, rndCode); err != nil {
+	if err = a.emailConfirmProvider.SaveConfirmationCode(ctx, user.ID, rndCode); err != nil {
 		return 0, "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	if err = a.emailConfirmProvider.SaveConfirmationCode(ctx, user.ID, rndCode); err != nil {
+	if err = sendVerificationEmail(user.Email, rndCode); err != nil {
 		return 0, "", "", fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -261,20 +269,18 @@ func (a *Auth) ConfirmUserEmail(ctx context.Context, confirmCode string, appID i
 
 	log.Info("confirming user")
 
-	confirmCodeID, confirmCodeFromDB, email, createdAt, err := a.emailConfirmProvider.ConfirmationCode(ctx, uid)
+	confCodeFromDB, err := a.emailConfirmProvider.ConfirmationCode(ctx, uid)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
-	_ = email
-
 	now := time.Now()
 
-	if confirmCode != confirmCodeFromDB {
+	if confirmCode != confCodeFromDB.Code {
 		return false, fmt.Errorf("%s: invalid confirm code", op)
 	}
 
-	if now.Sub(createdAt) > (50 * time.Minute) {
+	if now.Sub(confCodeFromDB.CreatedAt) > (50 * time.Minute) {
 		return false, fmt.Errorf("%s: confirm code is expired", op)
 	}
 
@@ -282,7 +288,7 @@ func (a *Auth) ConfirmUserEmail(ctx context.Context, confirmCode string, appID i
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
-	if err = a.emailConfirmProvider.DeleteConfirmationCode(ctx, confirmCodeID); err != nil {
+	if err = a.emailConfirmProvider.DeleteConfirmationCode(ctx, confCodeFromDB.ID); err != nil {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -429,4 +435,94 @@ func (a *Auth) GetUserData(ctx context.Context, appID int64) (models.User, error
 	}
 
 	return user, nil
+}
+
+func (a *Auth) SendCodeToResetPassword(ctx context.Context, email string) error {
+	const op = "auth.SendCodeToResetPassword"
+
+	isEmailConfirmed, err := a.passwordResetter.IsEmailConfirmed(ctx, email)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if !isEmailConfirmed {
+		return fmt.Errorf("%s: %w", op, errors.New("email is not confirmed"))
+	}
+
+	user, err := a.usrProvider.User(ctx, email)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Sending confirmation code
+	rndCode := rnd.GenerateRandomNumber()
+
+	if err = sendVerificationEmail(email, rndCode); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err = a.emailConfirmProvider.SaveConfirmationCode(ctx, user.ID, rndCode); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (a *Auth) SetNewPassword(ctx context.Context, confirmCode, email string, newPassword string) error {
+	const op = "auth.SetNewPassword"
+
+	log := a.log.With(
+		slog.String("op: ", op),
+		// slog.String("email: ", email), // do not do that
+	)
+
+	user, err := a.usrProvider.User(ctx, email)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	userAllData, err := a.usrProvider.UserAllData(ctx, user.ID)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Error("failed to generate password hash", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	uid := userAllData.ID
+
+	confCodeFromDB, err := a.emailConfirmProvider.ConfirmationCode(ctx, uid)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	location, _ := time.LoadLocation("Asia/Bishkek")
+	now := time.Now().In(location)
+	// now := time.Now()
+
+	if confirmCode != confCodeFromDB.Code {
+		return fmt.Errorf("%s: invalid confirm code", op)
+	}
+
+	if elapsedTime := now.Sub(confCodeFromDB.CreatedAt.In(location)); elapsedTime > (50 * time.Minute) {
+		return fmt.Errorf("%s: confirm code is expired", op)
+	}
+
+	if err = a.usrProvider.UserEmailConfirm(ctx, uid); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err = a.emailConfirmProvider.DeleteConfirmationCode(ctx, confCodeFromDB.ID); err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if err = a.passwordResetter.ChangePassword(ctx, userAllData.Email, passwordHash); err != nil {
+		log.Error("failed to change pass", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }

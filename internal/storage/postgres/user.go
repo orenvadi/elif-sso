@@ -45,7 +45,7 @@ func (s *Storage) UserAllData(ctx context.Context, uid int64) (models.User, erro
 	const op = "storage.postgres.User"
 
 	var user models.User
-	err := s.db.GetContext(ctx, &user, "SELECT id, first_name, last_name, phone_number, created_at, updated_at, email, pass_hash, is_admin FROM users WHERE id = $1", uid)
+	err := s.db.GetContext(ctx, &user, "SELECT id, first_name, last_name, phone_number, created_at, updated_at, email, pass_hash, is_admin, is_email_confirmed FROM users WHERE id = $1", uid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.User{}, fmt.Errorf("%s: %w, user = %v", op, storage.ErrUserNotFound, user)
@@ -110,4 +110,34 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	}
 
 	return isAdmin, nil
+}
+
+func (s *Storage) ChangePassword(ctx context.Context, email string, newPasswordHash []byte) error {
+	const op = "storage.postgres.UpdatePassword"
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET pass_hash = $1
+		WHERE email = $2
+	`, newPasswordHash, email)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) IsEmailConfirmed(ctx context.Context, email string) (bool, error) {
+	const op = "storage.postgres.IsEmailConfirmed"
+
+	var isConfirmed bool
+	err := s.db.GetContext(ctx, &isConfirmed, "SELECT is_email_confirmed FROM users WHERE email = $1", email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+		}
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return isConfirmed, nil
 }

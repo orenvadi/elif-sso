@@ -26,7 +26,7 @@ func New(log *slog.Logger, grpcPort int, storageDSN string, tokenTTL time.Durati
 
 	// DONE init auth server (auth)
 
-	authService := auth.New(log, storage, storage, storage, storage, storage, tokenTTL)
+	authService := auth.New(log, storage, storage, storage, storage, storage, storage, tokenTTL)
 
 	grpcApp := grpcapp.New(log, authService, storage, grpcPort)
 

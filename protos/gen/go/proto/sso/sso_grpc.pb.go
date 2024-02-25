@@ -32,6 +32,8 @@ type AuthClient interface {
 	IsAdmin(ctx context.Context, in *IsAdminRequest, opts ...grpc.CallOption) (*IsAdminResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	GetUserData(ctx context.Context, in *GetUserDataRequest, opts ...grpc.CallOption) (*GetUserDataResponse, error)
+	SendCodeToResetPassword(ctx context.Context, in *SendCodeToResetPasswordRequest, opts ...grpc.CallOption) (*SendCodeToResetPasswordResponse, error)
+	SetNewPassword(ctx context.Context, in *SetNewPasswordRequest, opts ...grpc.CallOption) (*SetNewPasswordResponse, error)
 }
 
 type authClient struct {
@@ -105,6 +107,24 @@ func (c *authClient) GetUserData(ctx context.Context, in *GetUserDataRequest, op
 	return out, nil
 }
 
+func (c *authClient) SendCodeToResetPassword(ctx context.Context, in *SendCodeToResetPasswordRequest, opts ...grpc.CallOption) (*SendCodeToResetPasswordResponse, error) {
+	out := new(SendCodeToResetPasswordResponse)
+	err := c.cc.Invoke(ctx, "/auth.Auth/SendCodeToResetPassword", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authClient) SetNewPassword(ctx context.Context, in *SetNewPasswordRequest, opts ...grpc.CallOption) (*SetNewPasswordResponse, error) {
+	out := new(SetNewPasswordResponse)
+	err := c.cc.Invoke(ctx, "/auth.Auth/SetNewPassword", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServer is the server API for Auth service.
 // All implementations must embed UnimplementedAuthServer
 // for forward compatibility
@@ -119,6 +139,8 @@ type AuthServer interface {
 	IsAdmin(context.Context, *IsAdminRequest) (*IsAdminResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	GetUserData(context.Context, *GetUserDataRequest) (*GetUserDataResponse, error)
+	SendCodeToResetPassword(context.Context, *SendCodeToResetPasswordRequest) (*SendCodeToResetPasswordResponse, error)
+	SetNewPassword(context.Context, *SetNewPasswordRequest) (*SetNewPasswordResponse, error)
 	mustEmbedUnimplementedAuthServer()
 }
 
@@ -146,6 +168,12 @@ func (UnimplementedAuthServer) Logout(context.Context, *LogoutRequest) (*LogoutR
 }
 func (UnimplementedAuthServer) GetUserData(context.Context, *GetUserDataRequest) (*GetUserDataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserData not implemented")
+}
+func (UnimplementedAuthServer) SendCodeToResetPassword(context.Context, *SendCodeToResetPasswordRequest) (*SendCodeToResetPasswordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendCodeToResetPassword not implemented")
+}
+func (UnimplementedAuthServer) SetNewPassword(context.Context, *SetNewPasswordRequest) (*SetNewPasswordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNewPassword not implemented")
 }
 func (UnimplementedAuthServer) mustEmbedUnimplementedAuthServer() {}
 
@@ -286,6 +314,42 @@ func _Auth_GetUserData_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Auth_SendCodeToResetPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendCodeToResetPasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServer).SendCodeToResetPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/auth.Auth/SendCodeToResetPassword",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServer).SendCodeToResetPassword(ctx, req.(*SendCodeToResetPasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Auth_SetNewPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNewPasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServer).SetNewPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/auth.Auth/SetNewPassword",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServer).SetNewPassword(ctx, req.(*SetNewPasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Auth_ServiceDesc is the grpc.ServiceDesc for Auth service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -320,6 +384,14 @@ var Auth_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserData",
 			Handler:    _Auth_GetUserData_Handler,
+		},
+		{
+			MethodName: "SendCodeToResetPassword",
+			Handler:    _Auth_SendCodeToResetPassword_Handler,
+		},
+		{
+			MethodName: "SetNewPassword",
+			Handler:    _Auth_SetNewPassword_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

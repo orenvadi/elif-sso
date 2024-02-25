@@ -3,7 +3,7 @@ syntax = "proto3";
 package auth;
 
 
-// option go_package = "tuzov.sso.v1;ssov1";
+// option go_package = "orenvadi.sso.v1;ssov1";
 
 import "buf/validate/validate.proto";
 import "google/protobuf/empty.proto";
@@ -25,6 +25,10 @@ service Auth {
   rpc Logout (LogoutRequest) returns (LogoutResponse);
 
   rpc GetUserData (GetUserDataRequest) returns (GetUserDataResponse);
+
+  rpc SendCodeToResetPassword (SendCodeToResetPasswordRequest) returns (SendCodeToResetPasswordResponse);
+
+  rpc SetNewPassword(SetNewPasswordRequest) returns (SetNewPasswordResponse);
 }
 
 message IsAdminRequest {
@@ -83,7 +87,7 @@ message UpdateUserResponse {
 
 
 message ConfirmUserEmailRequest{
-  string confirm_code = 1;
+  string confirm_code = 1       [(buf.validate.field).string.len=6];
   int64 app_id = 2;
 }
 
@@ -104,4 +108,25 @@ message GetUserDataResponse{
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
   string email = 7;
+}
+
+
+message SendCodeToResetPasswordRequest{
+  string email = 1      [(buf.validate.field).string.email = true];
+}
+
+message SendCodeToResetPasswordResponse{
+  bool success = 1;
+}
+
+
+message SetNewPasswordRequest{
+  string confirm_code = 1       [(buf.validate.field).string.len=6];
+  string email = 2              [(buf.validate.field).string.email = true];
+  string new_password = 3       [(buf.validate.field).string.min_len=6];
+}
+
+
+message SetNewPasswordResponse{
+  bool success = 1;
 }

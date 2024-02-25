@@ -23,6 +23,8 @@ type Auth interface {
 	IsAdmin(ctx context.Context, userID int64) (bool, error)
 	ConfirmUserEmail(ctx context.Context, code string, appID int64) (success bool, err error)
 	GetUserData(ctx context.Context, appID int64) (models.User, error)
+	SendCodeToResetPassword(ctx context.Context, email string) error
+	SetNewPassword(ctx context.Context, confirmCode, email string, newPassword string) error
 }
 
 type serverAPI struct {
@@ -163,7 +165,7 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ss
 		switch {
 
 		case req.GetUserId() == emptyValue:
-			return nil, status.Error(codes.InvalidArgument, "app_id is required")
+			return nil, status.Error(codes.InvalidArgument, "user_id is required")
 
 		default:
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -205,4 +207,46 @@ func (s *serverAPI) GetUserData(ctx context.Context, req *ssov1.GetUserDataReque
 		UpdatedAt:   timestamppb.New(user.UpdatedAt),
 		Email:       user.Email,
 	}, nil
+}
+
+func (s *serverAPI) SendCodeToResetPassword(ctx context.Context, req *ssov1.SendCodeToResetPasswordRequest) (*ssov1.SendCodeToResetPasswordResponse, error) {
+	v, err := protovalidate.New()
+	if err != nil {
+		log.Fatalln("error protovalidate", err)
+	}
+
+	// validating
+	if err := v.Validate(req); err != nil {
+		switch {
+		default:
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
+	if err = s.auth.SendCodeToResetPassword(ctx, req.GetEmail()); err != nil {
+		return nil, status.Error(codes.Unknown, err.Error())
+	}
+
+	return &ssov1.SendCodeToResetPasswordResponse{Success: true}, nil
+}
+
+func (s *serverAPI) SetNewPassword(ctx context.Context, req *ssov1.SetNewPasswordRequest) (*ssov1.SetNewPasswordResponse, error) {
+	v, err := protovalidate.New()
+	if err != nil {
+		log.Fatalln("error protovalidate", err)
+	}
+
+	// validating
+	if err := v.Validate(req); err != nil {
+		switch {
+		default:
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
+	if err = s.auth.SetNewPassword(ctx, req.GetConfirmCode(), req.GetEmail(), req.GetNewPassword()); err != nil {
+		return nil, status.Error(codes.Unknown, err.Error())
+	}
+
+	return &ssov1.SetNewPasswordResponse{Success: true}, nil
 }
