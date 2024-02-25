@@ -280,7 +280,7 @@ func (a *Auth) ConfirmUserEmail(ctx context.Context, confirmCode string, appID i
 		return false, fmt.Errorf("%s: invalid confirm code", op)
 	}
 
-	if now.Sub(confCodeFromDB.CreatedAt) > (50 * time.Minute) {
+	if now.Sub(confCodeFromDB.CreatedAt) > (5 * time.Minute) {
 		return false, fmt.Errorf("%s: confirm code is expired", op)
 	}
 
@@ -507,7 +507,7 @@ func (a *Auth) SetNewPassword(ctx context.Context, confirmCode, email string, ne
 		return fmt.Errorf("%s: invalid confirm code", op)
 	}
 
-	if elapsedTime := now.Sub(confCodeFromDB.CreatedAt.In(location)); elapsedTime > (50 * time.Minute) {
+	if elapsedTime := now.Sub(confCodeFromDB.CreatedAt.In(location)); elapsedTime > (5 * time.Minute) {
 		return fmt.Errorf("%s: confirm code is expired", op)
 	}
 
