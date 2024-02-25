@@ -1,26 +1,38 @@
-ARG APP_NAME=myapp
+# Use a Golang base image
+FROM golang:1.22 AS builder
 
-# Build stage
-FROM golang:1.22 as build
-ARG APP_NAME
-ENV APP_NAME=$APP_NAME
-WORKDIR /myapp
-COPY . .
+# Set the current working directory inside the container
+WORKDIR /app
+
+# Copy the Go modules files
+COPY go.mod go.sum ./
+
+# Download dependencies
 RUN go mod download
-RUN go build -o /app/$APP_NAME  
 
-# Production stage
-FROM alpine:latest as production
-ARG APP_NAME
-ENV APP_NAME=$APP_NAME
-WORKDIR /root/
-COPY --from=build /myapp/$APP_NAME ./  
+# Copy the source code into the container
+COPY . .
 
-# Copy migration files
-COPY migrations /migrations
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -o sso ./cmd/sso/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o migrator ./cmd/migrator/main.go
 
-# Run migrator
-RUN ./migrator
+# Use a lightweight base image
+FROM alpine:latest
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the binary files from the builder stage
+COPY --from=builder /app/sso /app/migrator ./
+
+# Set environment variables for database connection
+
+# Expose any necessary ports
+# EXPOSE <port_number>
+
+# Run the migrator before starting the application
+RUN ./migrator --storage-dsn="$STORAGE_DSN" --migrations-path=./migrations/postgres
 
 # Command to run the application
-CMD ./$APP_NAME
+CMD ["./sso"]
