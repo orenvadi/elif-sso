@@ -7,20 +7,23 @@ ENV APP_NAME=$APP_NAME
 WORKDIR /app
 COPY . .
 RUN go mod download
-RUN go build -o /$APP_NAME
+RUN go build -o /app/$APP_NAME  
 
 # Production stage
 FROM alpine:latest as production
 ARG APP_NAME
 ENV APP_NAME=$APP_NAME
 WORKDIR /root/
-COPY --from=build /$APP_NAME ./
+COPY --from=build /app/$APP_NAME ./  
 
 # Copy migration files
 COPY migrations /migrations
 
 # Run migrator
 RUN ./migrator
+
+# Expose any ports the app is expecting in the environment
+EXPOSE 8888
 
 # Command to run the application
 CMD ./$APP_NAME
