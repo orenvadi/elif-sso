@@ -50,14 +50,17 @@ func MustLoad() *Config {
 	if cfg.Storage.User == "" {
 		cfg.Storage.User = "postgres"
 	}
+
 	cfg.Storage.Password = viper.GetString("STORAGE_PASSWORD")
 	if cfg.Storage.Password == "" {
 		cfg.Storage.Password = "postgres"
 	}
+
 	cfg.Storage.Host = viper.GetString("STORAGE_HOST")
 	if cfg.Storage.Host == "" {
 		cfg.Storage.Host = "localhost"
 	}
+
 	cfg.Storage.DbName = viper.GetString("STORAGE_DB_NAME")
 	if cfg.Storage.DbName == "" {
 		panic("STORAGE_DB_NAME environment variable is required")
@@ -87,10 +90,12 @@ func MustLoad() *Config {
 	if grpcTimeoutStr == "" {
 		panic("GRPC_TIMEOUT environment variable is required")
 	}
+
 	grpcTimeout, err := time.ParseDuration(grpcTimeoutStr)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse GRPC_TIMEOUT: %s", err))
 	}
+
 	cfg.GRPC.Timeout = grpcTimeout
 
 	return &cfg
