@@ -24,7 +24,7 @@ func main() {
 
 	// DONE init Application (app)
 
-	application := app.New(log, cfg.GRPC.Port, cfg.Storage.DSN()+"?sslmode=require", cfg.TokenTTL)
+	application := app.New(log, cfg.GRPC.Port, cfg.Storage.DSN(), cfg.TokenTTL)
 
 	// DONE run gRPC-server of the app
 
