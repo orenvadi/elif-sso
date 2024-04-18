@@ -19,7 +19,7 @@ func New(log *slog.Logger, grpcPort int, storageDSN string, tokenTTL time.Durati
 	// DONE init storage
 
 	// storage, err := sqlite.New(storagePath)
-	storage, err := postgres.New(fmt.Sprintf("postgres://%s?sslmode=require", storageDSN))
+	storage, err := postgres.New(fmt.Sprintf("postgres://%s?sslmode=disable", storageDSN))
 	if err != nil {
 		panic(err)
 	}

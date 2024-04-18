@@ -7,8 +7,10 @@ import (
 
 	authgrpc "github.com/orenvadi/auth-grpc/grpc/auth"
 	"github.com/orenvadi/auth-grpc/internal/storage/postgres"
+
 	// "github.com/orenvadi/auth-grpc/internal/services/auth"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type App struct {
@@ -55,6 +57,8 @@ func (a *App) Run() error {
 	}
 
 	log.Info("gRPC server is running", slog.String("addr ", l.Addr().String()))
+
+	reflection.Register(a.gRPCServer)
 
 	if err := a.gRPCServer.Serve(l); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
